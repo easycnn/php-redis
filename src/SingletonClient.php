@@ -20,14 +20,20 @@ namespace inhere\redis;
  */
 class SingletonClient extends AbstractRedisClient
 {
+    /**
+     * @var \Closure
+     */
     private $value;
 
     /**
-     * instaneced connection
+     * instanced connection
      * @var \Redis
      */
-    private $contection;
+    private $connection;
 
+    /**
+     * {@inheritdoc}
+     */
     public function __construct(array $config)
     {
         parent::__construct($config);
@@ -37,6 +43,9 @@ class SingletonClient extends AbstractRedisClient
         }
     }
 
+    /**
+     * {@inheritdoc}
+     */
     public function __call($method, array $args)
     {
         $upperMethod = strtoupper($method);
@@ -46,7 +55,7 @@ class SingletonClient extends AbstractRedisClient
             isset($this->getSupportedCommands()[$upperMethod]) &&
             true === $this->getSupportedCommands()[$upperMethod]
         ) {
-            return call_user_func_array([$this->redis, $upperMethod], $args);
+            return call_user_func_array([$this->connection, $upperMethod], $args);
         }
 
         throw new UnknownMethodException("Call the method [$method] don't exists!");
@@ -57,6 +66,9 @@ class SingletonClient extends AbstractRedisClient
         $this->connection = null;
     }
 
+    /**
+     * @param array $config
+     */
     public function setConnection(array $config)
     {
         $this->value = function() use ($config)
@@ -75,17 +87,20 @@ class SingletonClient extends AbstractRedisClient
         };
     }
 
+    /**
+     * @return \Redis
+     */
     public function getConnection()
     {
-        if (!$this->contection) {
+        if (!$this->connection) {
             if ( $cb = $this->value ) {
                 throw new \InvalidArgumentException('No config for connect the redis');
             }
 
-            $this->contection = $cb();
+            $this->connection = $cb();
         }
 
-        return $this->contection;
+        return $this->connection;
     }
 
 }

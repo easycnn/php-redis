@@ -80,6 +80,9 @@ class MasterSlaveClient extends AbstractRedisClient
         }
     }
 
+    /**
+     * {@inheritdoc}
+     */
     public function __call($method, array $args)
     {
         $upperMethod = strtoupper($method);
@@ -95,13 +98,18 @@ class MasterSlaveClient extends AbstractRedisClient
         throw new UnknownMethodException("Call the method [$method] don't exists!");
     }
 
+    /**
+     * @param $upperMethod
+     * @param $args
+     * @return mixed
+     */
     public function execByMethod($upperMethod, $args)
     {
         if (
             isset($this->getReadOnlyOperations()[$upperMethod]) &&
-            $value = $this->getReadOnlyOperations()[$upperMethod] &&
+            ($value = $this->getReadOnlyOperations()[$upperMethod]) &&
             is_array($value) &&
-            call_user_func($value, $args)
+            call_user_func($value, $args, $upperMethod)
         ) {
             return call_user_func_array([$this->getReader(), $upperMethod], $args);
         }
@@ -116,8 +124,8 @@ class MasterSlaveClient extends AbstractRedisClient
 
     /**
      * set Writer
-     * @param string   $name
-     * @param array $cb
+     * @param string $name
+     * @param array $config
      */
     public function setWriter($name, array $config)
     {
@@ -128,7 +136,7 @@ class MasterSlaveClient extends AbstractRedisClient
     /**
      * get Writer
      * @param  string $name
-     * @return AbstractDriver
+     * @return \Redis
      */
     public function getWriter($name = 'master')
     {
@@ -149,16 +157,20 @@ class MasterSlaveClient extends AbstractRedisClient
     /**
      * get Reader
      * @param  string $name
-     * @return AbstractDriver
+     * @return \Redis
      */
     public function getReader($name = null)
     {
         return $this->getConnection(self::TYPE_READER, $name);
     }
 
+    /**
+     * @param $name
+     * @param array $config
+     */
     public function setConnection($name, array $config)
     {
-        $this->value[$name] = function() use ($config)
+        $this->values[$name] = function() use ($config)
         {
             $client = new \Redis();
             $client->connect($config['host'], $config['port'], $config['timeout']);
@@ -219,9 +231,9 @@ class MasterSlaveClient extends AbstractRedisClient
 
     /**
      * Checks if a SORT command is a readable operation by parsing the arguments
-     * array of the specified commad instance.
+     * array of the specified command args.
      *
-     * @param array $arguments Command instance.
+     * @param array $arguments Command args.
      *
      * @return bool
      */
@@ -245,7 +257,7 @@ class MasterSlaveClient extends AbstractRedisClient
      * Checks if BITFIELD performs a read-only operation by looking for certain
      * SET and INCRYBY modifiers in the arguments array of the command.
      *
-     * @param array $arguments Command instance.
+     * @param array $arguments Command args.
      *
      * @return bool
      */
@@ -267,16 +279,16 @@ class MasterSlaveClient extends AbstractRedisClient
 
     /**
      * Checks if a GEORADIUS command is a readable operation by parsing the
-     * arguments array of the specified commad instance.
+     * arguments array of the specified command instance.
      *
-     * @param array $arguments Command instance.
-     *
+     * @param array $arguments Command args.
+     * @param string $command Command name.
      * @return bool
      */
-    protected function isGeoradiusReadOnly(array $arguments)
+    protected function isGeoradiusReadOnly(array $arguments, $command)
     {
         $argc = count($arguments);
-        $startIndex = $command->getId() === 'GEORADIUS' ? 5 : 4;
+        $startIndex = $command === 'GEORADIUS' ? 5 : 4;
 
         if ($argc > $startIndex) {
             for ($i = $startIndex; $i < $argc; ++$i) {

@@ -19,17 +19,6 @@ class RedisFactory
     const MODE_CLUSTER      = 3;
 
     /**
-     * allow:
-     *    1 singleton
-     *    2 master-slave
-     *    3 cluster
-     * @var string
-     */
-    protected $mode = 1;
-
-    private $config = [];
-
-    /**
      * createClient
      * @param  array   $config
      * @param  integer $mode

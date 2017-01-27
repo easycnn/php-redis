@@ -1,5 +1,5 @@
 <?php
 namespace inhere\redis;
 
-class UnknownMethodException extends LogicException
+class UnknownMethodException extends \LogicException
 {}

@@ -35,7 +35,7 @@ class ClusterClient extends AbstractRedisClient
     ];
 
     /**
-     * instaneced connections
+     * instanced connections
      * @var \Redis[]
      */
     private $connections = [
@@ -43,6 +43,10 @@ class ClusterClient extends AbstractRedisClient
         // 'name2' => Object (\Redis),
     ];
 
+    /**
+     * ClusterClient constructor.
+     * @inheritdoc
+     */
     public function __construct(array $config)
     {
         parent::__construct($config);
@@ -52,6 +56,9 @@ class ClusterClient extends AbstractRedisClient
         }
     }
 
+    /**
+     * @inheritdoc
+     */
     public function __call($method, array $args)
     {
         $upperMethod = strtoupper($method);
@@ -67,11 +74,17 @@ class ClusterClient extends AbstractRedisClient
         throw new UnknownMethodException("Call the method [$method] don't exists!");
     }
 
+    /**
+     *
+     */
     public function disconnect()
     {
         $this->connections = [];
     }
 
+    /**
+     * @param array $config
+     */
     public function setConnections(array $config)
     {
         foreach ($config as $name => $conf) {
@@ -79,9 +92,13 @@ class ClusterClient extends AbstractRedisClient
         }
     }
 
+    /**
+     * @param $name
+     * @param array $config
+     */
     public function setConnection($name, array $config)
     {
-        $this->value[$name] = function() use ($config)
+        $this->values[$name] = function() use ($config)
         {
             $client = new \Redis();
             $client->connect($config['host'], $config['port'], $config['timeout']);
@@ -99,15 +116,12 @@ class ClusterClient extends AbstractRedisClient
 
     /**
      * getConnection
-     * @param  string $type
      * @param  string $name
      * @return \Redis
      */
     protected function getConnection($name = null)
     {
-        $types = $type . 's';
-
-        // no config, return defualt
+        // no config
         if ( !$this->config ) {
             throw new \RuntimeException('No connection config for connect the redis');
         }
@@ -122,11 +136,11 @@ class ClusterClient extends AbstractRedisClient
         }
 
         // if not be instanced.
-        if ( !isset($this->connections[$key]) ) {
-            $this->connections[$key] = $this->values[$key]();
+        if ( !isset($this->connections[$name]) ) {
+            $this->connections[$name] = $this->values[$name]();
         }
 
-        return $this->connections[$key];
+        return $this->connections[$name];
     }
 
 }
