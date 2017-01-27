@@ -38,12 +38,9 @@ interface ClientInterface
     // public function getConnection();
 
     /**
-     * Creates a Redis command with the specified arguments and sends a request
-     * to the server.
-     *
+     * Creates a Redis command with the specified arguments and sends a request to the server.
      * @param string $method    Command ID.
      * @param array  $arguments Arguments for the command.
-     *
      * @return mixed
      */
     public function __call($method, array $arguments);

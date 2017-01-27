@@ -204,4 +204,150 @@ abstract class AbstractRedisClient implements ClientInterface
         ]);
     }
 
+    /**************************************************************************
+     * basic method
+     *************************************************************************/
+
+    /**
+     * redis 中 key 是否存在
+     * @param string $key
+     * @return bool
+     */
+    public function existsKey($key)
+    {
+        return (bool)$this->exists($key);
+    }
+
+    /**
+     * 集合是否存在
+     * @param $key
+     * @return bool
+     */
+    public function existsSet($key)
+    {
+        return $this->sCard($key) > 0;
+    }
+
+    /**
+     * 集合是否存在元素 $member
+     * @param $key
+     * @param $member
+     * @return bool
+     */
+    public function existsInSet($key,$member)
+    {
+        return (bool)$this->sIsMember($key, $member);
+    }
+
+    /**
+     * 有序集合是否存在
+     * @param $key
+     * @return bool
+     */
+    public function existsZSet($key)
+    {
+        return $this->zCard($key) > 0;
+    }
+
+    /**
+     * 有序集合是否存在元素
+     * @param $key
+     * @param $member
+     * @return bool
+     */
+    public function existsInZSet($key, $member)
+    {
+        return null !== $this->zScore($key, $member);
+    }
+
+    /**
+     * @param $key
+     * @return bool
+     */
+    public function existsList($key)
+    {
+        return $this->existsKey($key) && $this->lLen($key);
+    }
+
+    /**
+     * @param string $key
+     * @return bool
+     */
+    public function existsHTable($key)
+    {
+        return $this->hLen($key) > 0;
+    }
+
+    /**
+     * check hash table is empty or is not exists.
+     * @param $key
+     * @return bool
+     */
+    public function isEmptyHTable($key)
+    {
+        return 0 === $this->hLen($key);
+    }
+
+    /**
+     * @param $key
+     * @param $field
+     * @return bool
+     */
+    public function existsInHTable($key, $field)
+    {
+        return 1 === $this->hExists($key, $field);
+    }
+
+    /**************************************************************************
+     * cache
+     *************************************************************************/
+
+    /**
+     * 添加缓存 - key 不存在时才会添加
+     * @param $key
+     * @param $seconds
+     * @param string|array $value
+     * @return mixed
+     */
+    public function addCache($key, $value, $seconds = 3600)
+    {
+        return $this->set($key, serialize($value), 'EX', $seconds, 'NX');
+    }
+
+    /**
+     * 设置缓存 - key 存在会直接覆盖原来的值，不存在即是添加
+     * @param $key
+     * @param $seconds
+     * @param string|array $value 要存储的数据 可以是字符串或者数组
+     * @return mixed
+     */
+    public function setCache($key, $value, $seconds = 3600)
+    {
+        return $this->set($key, serialize($value), 'EX', $seconds);
+    }
+
+    /**
+     * @param $key
+     * @param null $default
+     * @return string
+     */
+    public function getCache($key, $default = null)
+    {
+        return ($data = $this->get($key)) ? unserialize($data) : $default;
+    }
+
+    /**
+     * @param $key
+     * @return int 成功删除的条数
+     */
+    public function delCache($key)
+    {
+        $data = $this->get($key);
+
+        $this->del($key);
+
+        return $data;
+    }
+
+
 }

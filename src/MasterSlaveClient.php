@@ -47,7 +47,7 @@ class MasterSlaveClient extends AbstractRedisClient
     ];
 
     /**
-     * instaneced connections
+     * instanced connections
      * @var \Redis[]
      */
     private $connections = [
