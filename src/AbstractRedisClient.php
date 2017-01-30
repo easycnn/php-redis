@@ -53,7 +53,8 @@ namespace inhere\redis;
  * @method mixed  mSet(array $dictionary)
  * @method int    mSetNx(array $dictionary)
  * @method mixed  pSetEx($key, $milliseconds, $value)
- * @method mixed  set($key, $value, $expireResolution = null, $expireTTL = null, $flag = null)
+ * @method mixed  //set($key, $value, $expireResolution = null, $expireTTL = null, $flag = null)
+ * @method mixed  set($key, $value, $timeout = 0)
  * @method int    setBit($key, $offset, $value)
  * @method int    setEx($key, $seconds, $value)
  * @method int    setNx($key, $value)
@@ -305,13 +306,14 @@ abstract class AbstractRedisClient implements ClientInterface
     /**
      * 添加缓存 - key 不存在时才会添加
      * @param $key
-     * @param $seconds
      * @param string|array $value
+     * @param int $seconds
      * @return mixed
      */
     public function addCache($key, $value, $seconds = 3600)
     {
-        return $this->set($key, serialize($value), 'EX', $seconds, 'NX');
+        // return $this->set($key, serialize($value), 'EX', $seconds, 'NX');
+        return $this->exists($key) ? true : $this->setCache($key, $value, $seconds);
     }
 
     /**
@@ -323,7 +325,8 @@ abstract class AbstractRedisClient implements ClientInterface
      */
     public function setCache($key, $value, $seconds = 3600)
     {
-        return $this->set($key, serialize($value), 'EX', $seconds);
+        // return $this->set($key, serialize($value), 'EX', $seconds);
+        return $this->setEx($key, $seconds, serialize($value));
     }
 
     /**
