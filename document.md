@@ -65,9 +65,9 @@ use inhere\redis\RedisFactory;
 $client = RedisFactory::createClient($config);
 
 // add some event
-$client->on('connect', function ($name, $config) use($app)
+$client->on('connect', function ($name, $mode, $config) use($app)
 {
-    $app->logger->info("Connect to the $name", $config);
+    $app->logger->info("Connect to the $name, mode is '$mode'", $config);
 });
 
 $client->on('beforeExecute', function ($cmd, $type, $data) use($app)
