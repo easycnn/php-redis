@@ -1,8 +1,10 @@
-#php-redis
+# php-redis
 
 > a simple redis library of the php
 
-### Install
+
+
+## Install
 
 - use composer
 
@@ -27,6 +29,23 @@ _repositories_ add
 
 run: `composer update`
 
-### Document
+## Usage
 
-See [document](document.md)
+```
+use inhere\redis\RedisFactory;
+
+$config = [
+    'host' => 'redis',
+    'port' => 6379,
+    'timeout' => 0.0,
+    'database' => 0,
+];
+
+$client = RedisFactory::createClient($config);
+
+echo $redis->ping(); // +PONG
+```
+
+## Document
+
+More see [document](document.md)

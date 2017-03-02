@@ -20,26 +20,37 @@ namespace inhere\redis;
  */
 class SingletonClient extends AbstractRedisClient
 {
-    /**
-     * @var \Closure
-     */
-    private $value;
+    const MODE = 'singleton';
 
     /**
-     * instanced connection
-     * @var \Redis
+     * @var array
      */
-    private $connection;
+    protected static $defaultConfig = [
+        'host'  => '127.0.0.1',
+        'port'  => '6379',
+        'timeout' => 0.0,
+        'database' => '0',
+        'options'  => []
+    ];
 
     /**
-     * {@inheritdoc}
+     * @param null $name
+     * @return \Redis
      */
-    public function __construct(array $config)
+    protected function getConnection($name = null)
     {
-        parent::__construct($config);
+        return parent::getConnection(self::MODE);
+    }
 
-        if ($config) {
-            $this->setConnection($config);
+    /**
+     * @param array $config
+     */
+    public function setConfig(array $config)
+    {
+        if ( $config ) {
+            $this->config[self::MODE] = array_merge(self::$defaultConfig, $config);
+
+            $this->setCallback(self::MODE);
         }
     }
 
@@ -55,52 +66,12 @@ class SingletonClient extends AbstractRedisClient
             isset($this->getSupportedCommands()[$upperMethod]) &&
             true === $this->getSupportedCommands()[$upperMethod]
         ) {
-            return call_user_func_array([$this->connection, $upperMethod], $args);
+            // trigger before event (read)
+            $this->fireEvent(self::BEFORE_EXECUTE, [$upperMethod, 'unknown', [ 'args' => $args ]]);
+
+            return call_user_func_array([$this->getConnection(), $upperMethod], $args);
         }
 
         throw new UnknownMethodException("Call the method [$method] don't exists!");
     }
-
-    public function disconnect()
-    {
-        $this->connection = null;
-    }
-
-    /**
-     * @param array $config
-     */
-    public function setConnection(array $config)
-    {
-        $this->value = function() use ($config)
-        {
-            $client = new \Redis();
-            $client->connect($config['host'], $config['port'], $config['timeout']);
-            $database = isset($config['database']) ? $config['database'] : 0;
-            $client->select((int)$database);
-
-            $options = isset($config['options']) && is_array($config['options']) ? $config['options']:[];
-            foreach($options as $name => $value) {
-                $client->setOption($name, $value);
-            }
-
-            return $client;
-        };
-    }
-
-    /**
-     * @return \Redis
-     */
-    public function getConnection()
-    {
-        if (!$this->connection) {
-            if ( $cb = $this->value ) {
-                throw new \InvalidArgumentException('No config for connect the redis');
-            }
-
-            $this->connection = $cb();
-        }
-
-        return $this->connection;
-    }
-
 }

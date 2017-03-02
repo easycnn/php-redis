@@ -2,7 +2,7 @@
 
 ## config
 
-## singleton config
+### singleton config
 
 ```
 $config = [
@@ -39,6 +39,7 @@ $config = [
 
 ```
 $config = [
+     'mode' => 3, // 1 singleton 2 master-slave 3 cluster
      'name1' => [
          'host' => '127.0.0.1',
          'port' => '6379',
@@ -59,14 +60,20 @@ $config = [
 ```
 use inhere\redis\RedisFactory;
 
-$mode = 1;
+// $app is my application instance.
 
-if ( isset($config['mode']) ) {
-    $mode = (int)$config['mode'];
-    unset($config['mode']);
-}
+$client = RedisFactory::createClient($config);
 
-$redis = RedisFactory::createClient($config, $mode);
+// add some event
+$client->on('connect', function ($name, $config) use($app)
+{
+    $app->logger->info("Connect to the $name", $config);
+});
+
+$client->on('beforeExecute', function ($cmd, $type, $data) use($app)
+{
+    $app->logger->info("execute command: $cmd, TYPE: $type", $data);
+});
 ```
 
 ## usage

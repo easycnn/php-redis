@@ -38,7 +38,7 @@ namespace inhere\redis;
  * @method mixed  type($key)
  * @method int    append($key, $value)
  * @method int    bitCount($key, $start = null, $end = null)
- * @method int    bitOp($operation, $destKey, $key)
+ * @method int    bitOp($operation, $retKey, ...$keys)
  * @method array  bitField($key, $subCommand, ...$subCommandArg)
  * @method int    decr($key)
  * @method int    decrBy($key, $decrement)
@@ -112,14 +112,14 @@ namespace inhere\redis;
  * @method string zCount($key, $min, $max)
  * @method string zIncrBy($key, $increment, $member)
  * @method int    zInterStore($destination, array $keys, array $options = null)
- * @method array  zRange($key, $start, $stop, array $options = null)
- * @method array  zRangeByScore($key, $min, $max, array $options = null)
+ * @method array  zRange($key, $start, $end, $withScores = null)
+ * @method array  zRangeByScore($key, $start, $end, array $options = array() )
  * @method int    zRank($key, $member)
  * @method int    zRem($key, $member)
  * @method int    zRemRangeByRank($key, $start, $stop)
  * @method int    zRemRangeByScore($key, $min, $max)
- * @method array  zRevRange($key, $start, $stop, array $options = null)
- * @method array  zRevRangeByScore($key, $max, $min, array $options = null)
+ * @method array  zRevRange($key, $start, $end, $withScores = null)
+ * @method array  zRevRangeByScore($key, $start, $end, array $options = array())
  * @method int    zRevRank($key, $member)
  * @method int    zUnionStore($destination, array $keys, array $options = null)
  * @method string zScore($key, $member)
@@ -138,8 +138,8 @@ namespace inhere\redis;
  * @method mixed  multi()
  * @method mixed  unwatch()
  * @method mixed  watch($key)
- * @method mixed  eval($script, $numkeys, $keyOrArg1 = null, $keyOrArgN = null)
- * @method mixed  evalSha($script, $numkeys, $keyOrArg1 = null, $keyOrArgN = null)
+ * @method mixed  eval($script, $numKeys, $keyOrArg1 = null, $keyOrArgN = null)
+ * @method mixed  evalSha($script, $numKeys, $keyOrArg1 = null, $keyOrArgN = null)
  * @method mixed  script($subCommand, $argument = null)
  * @method mixed  auth($password)
  * @method string echo($message)
@@ -173,16 +173,274 @@ abstract class AbstractRedisClient implements ClientInterface
         getSupportedCommands as supCommands;
     }
 
+    /**
+     * connection names
+     * if value is TRUE, has been connected
+     * @var array
+     */
+    protected $names = [
+        // 'name1' => false,
+        // 'name2' => true, // has been connected
+    ];
+
+    /**
+     * connection callback list
+     * @var array
+     */
+    protected $callbacks = [
+        // 'name1' => function(){},
+        // 'name2' => function(){},
+    ];
+
+    /**
+     * instanced connections
+     * @var \Redis[]
+     */
+    protected $connections = [
+        // 'name1' => Object (\Redis),
+        // 'name2' => Object (\Redis),
+    ];
+
+    /**
+     * current active connection
+     * @var \Redis
+     */
+    protected $activated;
+
+    /**
+     * event handlers
+     * @var array[]
+     */
+    protected $eventCallbacks = [];
+
+    /**
+     * @var array
+     */
     protected $config = [];
 
     public function __construct(array $config)
     {
-        $this->config = $config;
+        $this->setConfig($config);
     }
 
+    /**
+     * @param null $name
+     * @return \Redis
+     */
+    public function reader($name = null)
+    {
+        // return a random connection
+        if ( null === $name ) {
+            $name = array_rand($this->names);
+        }
+
+        return $this->getConnection($name);
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function writer($name = null)
+    {
+        // return a random connection
+        if ( null === $name ) {
+            $name = array_rand($this->names);
+        }
+
+        return $this->getConnection($name);
+    }
+
+    /**
+     * getConnection
+     * @param  string $name
+     * @return \Redis
+     */
+    protected function getConnection($name = null)
+    {
+        // no config
+        if ( !$this->config ) {
+            throw new \RuntimeException('No connection config for connect to the redis');
+        }
+
+        if ( !isset($this->names[$name]) ) {
+            throw new \InvalidArgumentException("The connection [$name] don't exists!");
+        }
+
+        // no config for $name connection
+        if ( !$this->config[$name] ) {
+            throw new \RuntimeException('No config for the connection: ' . $name);
+        }
+
+        // if not be instanced.
+        if ( !isset($this->connections[$name]) ) {
+            $cb = $this->callbacks[$name];
+            $config = $this->config[$name];
+
+            // create connection
+            $this->names[$name] = true;
+            $this->connections[$name] = $cb($config);
+
+            // trigger success connected
+            $this->fireEvent(self::CONNECT, [ $name, static::MODE, $config ]);
+        }
+
+        // the current connection always latest.
+        return ($this->activated = $this->connections[$name]);
+    }
+
+    /**
+     * @param array $config
+     */
+    protected function setCallbacks(array $config)
+    {
+        foreach ($config as $name => $conf) {
+            if ( !$conf ) {
+                continue;
+            }
+
+            $this->setCallback($name);
+        }
+    }
+
+    /**
+     * @param $name
+     */
+    protected function setCallback($name)
+    {
+        if ( isset($this->names[$name]) && true === $this->names[$name]) {
+            throw new \LogicException("Connection [$name] has been connected, don't allow override it.");
+        }
+
+        // not connected
+        $this->names[$name] = false;
+        $this->callbacks[$name] = $this->createCallback();
+    }
+
+    /**
+     * @return \Closure
+     */
+    protected function createCallback()
+    {
+        return function(array $config)
+        {
+            $config = array_merge([
+                'host'  => '127.0.0.1',
+                'port'  => '6379',
+                'timeout' => 0.0,
+                'database' => '0',
+                'options'  => []
+            ], $config);
+
+            $client = new \Redis();
+            $client->connect($config['host'], $config['port'], $config['timeout']);
+            $client->select((int)$config['database']);
+
+            $options = is_array($config['options']) ? $config['options']:[];
+            foreach($options as $name => $value) {
+                $client->setOption($name, $value);
+            }
+
+            return $client;
+        };
+    }
+
+    /**
+     * @return \Redis
+     */
+    public function getActivated()
+    {
+        return $this->activated;
+    }
+
+    /**
+     * @return string
+     */
+    public function getMode()
+    {
+        return static::MODE;
+    }
+
+    /**
+     * @return array
+     */
+    public function getNames()
+    {
+        return $this->names;
+    }
+
+    /**
+     * @return array
+     */
     public function getConfig()
     {
         return $this->config;
+    }
+
+    /**
+     * @param array $config
+     */
+    public function setConfig(array $config)
+    {
+        if ($config) {
+            $this->config = $config;
+
+            $this->setCallbacks($this->config);
+        }
+    }
+
+    /**
+     * add a event handler
+     * @param $event
+     * @param callable $handler
+     */
+    public function on($event, callable $handler)
+    {
+        $this->addEventCallback($event, $handler);
+    }
+    public function addEventCallback($event, callable $handler)
+    {
+        if ( self::isSupportedEvent($event) && !isset($this->eventCallbacks[$event])) {
+            $this->eventCallbacks[$event][] = $handler;
+        }
+    }
+
+    /**
+     * trigger event
+     * @param $event
+     * @param array $args
+     */
+    public function fireEvent($event, array $args = [])
+    {
+        if ( self::isSupportedEvent($event) && isset($this->eventCallbacks[$event])) {
+
+            foreach ($this->eventCallbacks[$event] as $cb) {
+                call_user_func_array($cb, $args);
+            }
+        }
+    }
+
+    public function disconnect()
+    {
+        $this->connections = [];
+
+        $this->fireEvent(self::DISCONNECT);
+    }
+
+    /**
+     * @return array
+     */
+    public static function supportedEvents()
+    {
+        return [ self::CONNECT, self::DISCONNECT, self::BEFORE_EXECUTE, self::AFTER_EXECUTE ];
+    }
+
+    /**
+     * @param $name
+     * @return array
+     */
+    public static function isSupportedEvent($name)
+    {
+        return in_array($name, static::supportedEvents(), true);
     }
 
     /**
@@ -190,7 +448,7 @@ abstract class AbstractRedisClient implements ClientInterface
      */
     public function getSupportedCommands()
     {
-        return array_merge(self::supCommands(),[
+        return array_merge($this->supCommands(),[
             'SHUTDOWN' => false,
             'INFO' => false,
             'DBSIZE' => false,
@@ -351,6 +609,4 @@ abstract class AbstractRedisClient implements ClientInterface
 
         return $data;
     }
-
-
 }

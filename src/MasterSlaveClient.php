@@ -34,50 +34,161 @@ namespace inhere\redis;
  */
 class MasterSlaveClient extends AbstractRedisClient
 {
+    const MODE = 'master-slave';
+
     const TYPE_WRITER = 'writer';
     const TYPE_READER = 'reader';
+
+    /**
+     * @var array
+     */
+    protected $typeNames = [
+        'writer' => [
+            // 'master'
+        ],
+        'reader' => [
+            // 'slave1','slave2',
+        ]
+    ];
 
     /**
      * connection callback list
      * @var array
      */
-    private $values = [
+    // protected $values = [
         // 'writer.master' => function(){},
         // 'reader.slave1' => function(){},
-    ];
+    //];
 
     /**
      * instanced connections
      * @var \Redis[]
      */
-    private $connections = [
+    //protected $connections = [
         // 'writer.master' => Object (\Redis),
-    ];
-
-    protected $config = [
-        'writers' => [],
-        'readers' => [
-            // slave1 ...
-            // slave2 ...
-        ],
-    ];
+    //];
 
     /**
-     * {@inheritdoc}
+     * @var array
      */
-    public function __construct(array $config)
+    // protected $config = [
+    // 'writer.master' => [],
+    // 'reader.slave1' => [],
+    // 'reader.slave2' => [],
+    // ];
+
+
+    /**
+     * @inheritdoc
+     */
+    public function setConfig(array $config)
     {
-        parent::__construct([]);
+        if ( $config ) {
 
-        if ( isset($config['master']) ) {
-            $this->setWriter('master', $config['master']);
-        }
-
-        if ( isset($config['slaves']) ) {
-            foreach ($config['slaves'] as $name => $reader) {
-                $this->setReader($name, $reader);
+            // Compatible
+            if ( isset($config['master']) ) {
+                $this->config['writer.master'] = $config['master'];
             }
+
+            if ( isset($config['writers']) && is_array($config['writers']) ) {
+                foreach ($config['writers'] as $name => $conf) {
+                    $this->config['writer.' . $name] = $conf;
+                }
+            }
+
+            // Compatible
+            if ( isset($config['slaves']) && is_array($config['slaves']) ) {
+                foreach ($config['slaves'] as $name => $conf) {
+                    $this->config['reader.' . $name] = $conf;
+                }
+            }
+
+            if ( isset($config['readers']) && is_array($config['readers']) ) {
+                foreach ($config['readers'] as $name => $conf) {
+                    $this->config['reader.' . $name] = $conf;
+                }
+            }
+
+            // create callbacks
+            $this->setCallbacks($this->config);
         }
+    }
+
+    /**
+     * @inheritdoc
+     */
+    protected function setCallback($name)
+    {
+        list($type, $rawName) = explode('.', $name, 2);
+
+        $this->typeNames[$type][] = $rawName;
+
+        parent::setCallback($name);
+    }
+
+    /**
+     * @return \Redis
+     */
+    public function master()
+    {
+        return $this->writer('master');
+    }
+
+    /**
+     * @param null $name
+     * @return \Redis
+     */
+    public function slave($name = null)
+    {
+        return $this->reader($name);
+    }
+
+    /**
+     * @param null $name
+     * @return \Redis
+     */
+    public function reader($name = null)
+    {
+        if ( !($typeNames = $this->typeNames[self::TYPE_READER]) ) {
+            throw new \RuntimeException('Without any reader(slave) redis config!');
+        }
+
+        // return a random connection
+        if ( null === $name ) {
+            $key = array_rand($typeNames);
+            $name = $typeNames[$key];
+        }
+
+        return $this->getConnection('reader.' . $name);
+    }
+
+    /**
+     * @param null|string $name
+     * @return \Redis
+     */
+    public function writer($name = null)
+    {
+        if ( null === $name ) {
+            $name = 'master';
+        }
+
+        return $this->getConnection('writer.' . $name);
+    }
+
+    /**
+     * getConnection
+     * @param  string $name
+     * @return \Redis
+     */
+    protected function getConnection($name = null)
+    {
+        if ( !$name || strpos($name, '.') <= 0 ) {
+            throw new \RuntimeException('Connection name don\'t allow empty or format error.');
+        }
+
+        // list($type, $rawName) = explode('.', $name, 2);
+
+        return parent::getConnection($name);
     }
 
     /**
@@ -111,123 +222,22 @@ class MasterSlaveClient extends AbstractRedisClient
             is_array($value) &&
             call_user_func($value, $args, $upperMethod)
         ) {
-            return call_user_func_array([$this->getReader(), $upperMethod], $args);
+
+            // trigger before event (read)
+            $this->fireEvent(self::BEFORE_EXECUTE, [$upperMethod, 'read', [ 'args' => $args ]]);
+
+            return call_user_func_array([$this->reader(), $upperMethod], $args);
         }
 
-        return call_user_func_array([$this->getWriter(), $upperMethod], $args);
+        // trigger before event (write)
+        $this->fireEvent(self::BEFORE_EXECUTE, [$upperMethod, 'write', [ 'args' => $args ]]);
+
+        return call_user_func_array([$this->writer(), $upperMethod], $args);
     }
 
-    public function disconnect()
-    {
-        $this->connections = [];
-    }
-
-    /**
-     * set Writer
-     * @param string $name
-     * @param array $config
-     */
-    public function setWriter($name, array $config)
-    {
-        $this->config['writers'][$name] = $config;
-        $this->setConnection("writer.{$name}", $config);
-    }
-
-    /**
-     * get Writer
-     * @param  string $name
-     * @return \Redis
-     */
-    public function getWriter($name = 'master')
-    {
-        return $this->getConnection(self::TYPE_WRITER, $name);
-    }
-
-    /**
-     * setReader
-     * @param string   $name
-     * @param array $config
-     */
-    public function setReader($name, array $config)
-    {
-        $this->config['readers'][$name] = $config;
-        $this->setConnection("reader.{$name}", $config);
-    }
-
-    /**
-     * get Reader
-     * @param  string $name
-     * @return \Redis
-     */
-    public function getReader($name = null)
-    {
-        return $this->getConnection(self::TYPE_READER, $name);
-    }
-
-    /**
-     * @param $name
-     * @param array $config
-     */
-    public function setConnection($name, array $config)
-    {
-        $this->values[$name] = function() use ($config)
-        {
-            $client = new \Redis();
-            $client->connect($config['host'], $config['port'], $config['timeout']);
-            $database = isset($config['database']) ? $config['database'] : 0;
-            $client->select((int)$database);
-
-            $options = isset($config['options']) && is_array($config['options']) ? $config['options']:[];
-            foreach($options as $name => $value) {
-                $client->setOption($name, $value);
-            }
-
-            return $client;
-        };
-    }
-
-    /**
-     * getConnection
-     * @param  string $type
-     * @param  string $name
-     * @return \Redis
-     */
-    protected function getConnection($type, $name)
-    {
-        $types = $type . 's';
-
-        // no reader/writer, return defualt
-        if ( !$this->config[$types] ) {
-            throw new \RuntimeException('No connection for type:' . $types);
-        }
-
-        if ( null === $name ) {
-            // return a random reader
-            $name = array_rand($this->config[$types]);
-        }
-
-        $key = $type . '.' . $name;
-
-        if ( !isset($this->config[$types][$name]) ) {
-            throw new \InvalidArgumentException("The connection [$type: $name] don't exists!");
-        }
-
-        // if not be instanced.
-        if ( !isset($this->connections[$key]) ) {
-            $this->connections[$key] = $this->values[$key]();
-        }
-
-        return $this->connections[$key];
-    }
-
-    public function getValue($name, $type = self::TYPE_READER)
-    {
-        if ( !isset($this->config[$type][$name]) ) {
-            throw new \InvalidArgumentException("The connection [$type: $name] don't exists!");
-        }
-
-        return $this->values[$type][$name];
-    }
+/////////////////////////////////////////////////////////////////////////////////////
+//// help method
+/////////////////////////////////////////////////////////////////////////////////////
 
     /**
      * Checks if a SORT command is a readable operation by parsing the arguments

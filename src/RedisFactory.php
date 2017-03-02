@@ -21,11 +21,17 @@ class RedisFactory
     /**
      * createClient
      * @param  array   $config
-     * @param  integer $mode
      * @return AbstractRedisClient
      */
-    public static function createClient(array $config, $mode = 1)
+    public static function createClient(array $config)
     {
+        $mode = self::MODE_SINGLETON;
+
+        if ( isset($config['mode']) ) {
+            $mode = self::isSupportedMode($config['mode']) ? $config['mode'] : self::MODE_SINGLETON;
+            unset($config['mode']);
+        }
+
         if ($mode === self::MODE_CLUSTER) {
             return new ClusterClient($config);
         } elseif ($mode === self::MODE_MASTER_SLAVE) {
@@ -33,5 +39,14 @@ class RedisFactory
         }
 
         return new SingletonClient($config);
+    }
+
+    /**
+     * @param $mode
+     * @return bool
+     */
+    public static function isSupportedMode($mode)
+    {
+        return in_array($mode, [self::MODE_SINGLETON, self::MODE_MASTER_SLAVE, self::MODE_CLUSTER], true);
     }
 }

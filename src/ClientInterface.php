@@ -14,28 +14,44 @@ namespace inhere\redis;
  */
 interface ClientInterface
 {
+    // mode: singleton master-slave cluster
+    const MODE = '';
+
+    //
+    // event lists
+    // connect disconnect beforeExecute afterExecute
+    //
+
+    //
+    const CONNECT = 'connect';
+    const DISCONNECT = 'disconnect';
+
+    const BEFORE_EXECUTE = 'beforeExecute';
+    const AFTER_EXECUTE  = 'afterExecute'; // unused
+
+    /**
+     * @param null|string $name
+     * @return \Redis
+     */
+    public function reader($name = null);
+
+    /**
+     * @param null|string $name
+     * @return \Redis
+     */
+    public function writer($name = null);
+
+    public function disconnect();
+
+    public function fireEvent($event, array $args = []);
+
+    public static function supportedEvents();
+
     /**
      * Returns the client options specified upon initialization.
-     *
      * @return array
      */
     public function getConfig();
-
-    /**
-     * Opens the underlying connection to the server.
-     */
-    // public function connect();
-
-    /**
-     * Closes the underlying connection from the server.
-     */
-    public function disconnect();
-
-    /**
-     * Returns the underlying connection instance.
-     *
-     */
-    // public function getConnection();
 
     /**
      * Creates a Redis command with the specified arguments and sends a request to the server.
