@@ -395,11 +395,7 @@ abstract class AbstractRedisClient implements ClientInterface
      */
     public function on($event, callable $handler)
     {
-        $this->addEventCallback($event, $handler);
-    }
-    public function addEventCallback($event, callable $handler)
-    {
-        if ( self::isSupportedEvent($event) && !isset($this->eventCallbacks[$event])) {
+        if ( self::isSupportedEvent($event) ) {
             $this->eventCallbacks[$event][] = $handler;
         }
     }
@@ -411,8 +407,7 @@ abstract class AbstractRedisClient implements ClientInterface
      */
     public function fireEvent($event, array $args = [])
     {
-        if ( self::isSupportedEvent($event) && isset($this->eventCallbacks[$event])) {
-
+        if ( isset($this->eventCallbacks[$event])) {
             foreach ($this->eventCallbacks[$event] as $cb) {
                 call_user_func_array($cb, $args);
             }
