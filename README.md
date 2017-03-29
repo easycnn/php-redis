@@ -12,7 +12,7 @@ edit `composer.json`
 _require_ add
 
 ```
-"inhere/php-redis": "dev-master",
+"inhere/redis": "dev-master",
 ```
 
 _repositories_ add 
