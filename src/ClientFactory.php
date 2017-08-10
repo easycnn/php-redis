@@ -9,32 +9,34 @@
 namespace inhere\redis;
 
 /**
- * Class RedisFactory
+ * Class ClientFactory
  * @package inhere\redis
  */
-class RedisFactory
+class ClientFactory
 {
-    const MODE_SINGLETON    = 1;
+    const MODE_SINGLETON = 1;
     const MODE_MASTER_SLAVE = 2;
-    const MODE_CLUSTER      = 3;
+    const MODE_CLUSTER = 3;
 
     /**
-     * createClient
-     * @param  array   $config
-     * @return AbstractRedisClient
+     * create a client
+     * @param  array $config
+     * @return AbstractClient
      */
-    public static function createClient(array $config)
+    public static function make(array $config)
     {
         $mode = self::MODE_SINGLETON;
 
-        if ( isset($config['mode']) ) {
+        if (isset($config['mode'])) {
             $mode = self::isSupportedMode($config['mode']) ? $config['mode'] : self::MODE_SINGLETON;
             unset($config['mode']);
         }
 
         if ($mode === self::MODE_CLUSTER) {
             return new ClusterClient($config);
-        } elseif ($mode === self::MODE_MASTER_SLAVE) {
+        }
+
+        if ($mode === self::MODE_MASTER_SLAVE) {
             return new MasterSlaveClient($config);
         }
 

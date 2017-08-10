@@ -11,6 +11,8 @@
 namespace inhere\redis;
 
 /**
+ *
+ * ```php
  * $client = new MasterSlaveClient($config);
  * $config = [
  *     'master' => [
@@ -31,8 +33,9 @@ namespace inhere\redis;
  *         ...
  *     ],
  * ]
+ * ```
  */
-class MasterSlaveClient extends AbstractRedisClient
+class MasterSlaveClient extends AbstractClient
 {
     const MODE = 'master-slave';
 
@@ -51,24 +54,24 @@ class MasterSlaveClient extends AbstractRedisClient
         ]
     ];
 
-    /**
+    /*
      * connection callback list
      * @var array
      */
     // protected $values = [
-        // 'writer.master' => function(){},
-        // 'reader.slave1' => function(){},
+    // 'writer.master' => function(){},
+    // 'reader.slave1' => function(){},
     //];
 
-    /**
+    /*
      * instanced connections
      * @var \Redis[]
      */
     //protected $connections = [
-        // 'writer.master' => Object (\Redis),
+    // 'writer.master' => Object (\Redis),
     //];
 
-    /**
+    /*
      * @var array
      */
     // protected $config = [
@@ -83,27 +86,27 @@ class MasterSlaveClient extends AbstractRedisClient
      */
     public function setConfig(array $config)
     {
-        if ( $config ) {
-
+        /** @var array[] $config */
+        if ($config) {
             // Compatible
-            if ( isset($config['master']) ) {
+            if (isset($config['master'])) {
                 $this->config['writer.master'] = $config['master'];
             }
 
-            if ( isset($config['writers']) && is_array($config['writers']) ) {
+            if (isset($config['writers']) && is_array($config['writers'])) {
                 foreach ($config['writers'] as $name => $conf) {
                     $this->config['writer.' . $name] = $conf;
                 }
             }
 
             // Compatible
-            if ( isset($config['slaves']) && is_array($config['slaves']) ) {
+            if (isset($config['slaves']) && is_array($config['slaves'])) {
                 foreach ($config['slaves'] as $name => $conf) {
                     $this->config['reader.' . $name] = $conf;
                 }
             }
 
-            if ( isset($config['readers']) && is_array($config['readers']) ) {
+            if (isset($config['readers']) && is_array($config['readers'])) {
                 foreach ($config['readers'] as $name => $conf) {
                     $this->config['reader.' . $name] = $conf;
                 }
@@ -135,7 +138,7 @@ class MasterSlaveClient extends AbstractRedisClient
     }
 
     /**
-     * @param null $name
+     * @param null|string $name
      * @return \Redis
      */
     public function slave($name = null)
@@ -144,17 +147,17 @@ class MasterSlaveClient extends AbstractRedisClient
     }
 
     /**
-     * @param null $name
+     * @param null|string $name
      * @return \Redis
      */
     public function reader($name = null)
     {
-        if ( !($typeNames = $this->typeNames[self::TYPE_READER]) ) {
+        if (!($typeNames = $this->typeNames[self::TYPE_READER])) {
             throw new \RuntimeException('Without any reader(slave) redis config!');
         }
 
         // return a random connection
-        if ( null === $name ) {
+        if (null === $name) {
             $key = array_rand($typeNames);
             $name = $typeNames[$key];
         }
@@ -168,7 +171,7 @@ class MasterSlaveClient extends AbstractRedisClient
      */
     public function writer($name = null)
     {
-        if ( null === $name ) {
+        if (null === $name) {
             $name = 'master';
         }
 
@@ -182,7 +185,7 @@ class MasterSlaveClient extends AbstractRedisClient
      */
     protected function getConnection($name = null)
     {
-        if ( !$name || strpos($name, '.') <= 0 ) {
+        if (!$name || strpos($name, '.') <= 0) {
             throw new \RuntimeException('Connection name don\'t allow empty or format error.');
         }
 
@@ -206,7 +209,7 @@ class MasterSlaveClient extends AbstractRedisClient
             return $this->execByMethod($upperMethod, $args);
         }
 
-        throw new UnknownMethodException("Call the method [$method] don't exists!");
+        throw new UnknownMethodException("Call the method [$method] don't exists OR don't allow access!");
     }
 
     /**
@@ -216,35 +219,45 @@ class MasterSlaveClient extends AbstractRedisClient
      */
     public function execByMethod($upperMethod, $args)
     {
+        //// read operation
         if (
             isset($this->getReadOnlyOperations()[$upperMethod]) &&
             ($value = $this->getReadOnlyOperations()[$upperMethod]) &&
             is_array($value) &&
-            call_user_func($value, $args, $upperMethod)
+            $value[0]->$value[1]($args, $upperMethod) // [$this, 'isSortReadOnly']
+            //call_user_func($value, $args, $upperMethod)
         ) {
+            $operate = 'read';
 
-            // trigger before event (read)
-            $this->fireEvent(self::BEFORE_EXECUTE, [$upperMethod, 'read', [ 'args' => $args ]]);
+            // trigger before execute event
+            $this->fire(self::BEFORE_EXECUTE, [$upperMethod, $args, $operate]);
 
-            return call_user_func_array([$this->reader(), $upperMethod], $args);
+            $ret = $this->reader()->$upperMethod(...$args);
+
+            //// write operation
+        } else {
+            $operate = 'write';
+
+            // trigger before execute event
+            $this->fire(self::BEFORE_EXECUTE, [$upperMethod, $args, $operate]);
+
+            $ret = $this->writer()->$upperMethod(...$args);
         }
 
-        // trigger before event (write)
-        $this->fireEvent(self::BEFORE_EXECUTE, [$upperMethod, 'write', [ 'args' => $args ]]);
+        // trigger after execute event
+        $this->fire(self::AFTER_EXECUTE, [$upperMethod, ['args' => $args, 'ret' => $ret], $operate]);
 
-        return call_user_func_array([$this->writer(), $upperMethod], $args);
+        return $ret;
     }
 
 /////////////////////////////////////////////////////////////////////////////////////
-//// help method
+//// help method(referrer package predis)
 /////////////////////////////////////////////////////////////////////////////////////
 
     /**
      * Checks if a SORT command is a readable operation by parsing the arguments
      * array of the specified command args.
-     *
      * @param array $arguments Command args.
-     *
      * @return bool
      */
     protected function isSortReadOnly(array $arguments)
@@ -266,9 +279,7 @@ class MasterSlaveClient extends AbstractRedisClient
     /**
      * Checks if BITFIELD performs a read-only operation by looking for certain
      * SET and INCRYBY modifiers in the arguments array of the command.
-     *
      * @param array $arguments Command args.
-     *
      * @return bool
      */
     protected function isBitfieldReadOnly(array $arguments)
@@ -290,7 +301,6 @@ class MasterSlaveClient extends AbstractRedisClient
     /**
      * Checks if a GEORADIUS command is a readable operation by parsing the
      * arguments array of the specified command instance.
-     *
      * @param array $arguments Command args.
      * @param string $command Command name.
      * @return bool
@@ -314,12 +324,11 @@ class MasterSlaveClient extends AbstractRedisClient
 
     /**
      * Returns the default list of commands performing read-only operations.
-     *
      * @return array
      */
     protected function getReadOnlyOperations()
     {
-        return array(
+        return [
             'EXISTS' => true,
             'TYPE' => true,
             'KEYS' => true,
@@ -375,13 +384,13 @@ class MasterSlaveClient extends AbstractRedisClient
             'BITPOS' => true,
             'TIME' => true,
             'PFCOUNT' => true,
-            'SORT' => array($this, 'isSortReadOnly'),
-            'BITFIELD' => array($this, 'isBitfieldReadOnly'),
+            'SORT' => [$this, 'isSortReadOnly'],
+            'BITFIELD' => [$this, 'isBitfieldReadOnly'],
             'GEOHASH' => true,
             'GEOPOS' => true,
             'GEODIST' => true,
-            'GEORADIUS' => array($this, 'isGeoradiusReadOnly'),
-            'GEORADIUSBYMEMBER' => array($this, 'isGeoradiusReadOnly'),
-        );
+            'GEORADIUS' => [$this, 'isGeoradiusReadOnly'],
+            'GEORADIUSBYMEMBER' => [$this, 'isGeoradiusReadOnly'],
+        ];
     }
 }

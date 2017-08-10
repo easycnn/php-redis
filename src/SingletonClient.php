@@ -10,6 +10,7 @@
 namespace inhere\redis;
 
 /**
+ * ```php
  * $client = new SingletonClient($config);
  * $config = [
  *     'host' => '127.0.0.1',
@@ -17,8 +18,9 @@ namespace inhere\redis;
  *     'database' => '0',
  *     'options' => []
  * ];
+ * ```
  */
-class SingletonClient extends AbstractRedisClient
+class SingletonClient extends AbstractClient
 {
     const MODE = 'singleton';
 
@@ -26,11 +28,11 @@ class SingletonClient extends AbstractRedisClient
      * @var array
      */
     protected static $defaultConfig = [
-        'host'  => '127.0.0.1',
-        'port'  => '6379',
+        'host' => '127.0.0.1',
+        'port' => '6379',
         'timeout' => 0.0,
         'database' => '0',
-        'options'  => []
+        'options' => []
     ];
 
     /**
@@ -47,7 +49,7 @@ class SingletonClient extends AbstractRedisClient
      */
     public function setConfig(array $config)
     {
-        if ( $config ) {
+        if ($config) {
             $this->config[self::MODE] = array_merge(self::$defaultConfig, $config);
 
             $this->setCallback(self::MODE);
@@ -67,9 +69,14 @@ class SingletonClient extends AbstractRedisClient
             true === $this->getSupportedCommands()[$upperMethod]
         ) {
             // trigger before event (read)
-            $this->fireEvent(self::BEFORE_EXECUTE, [$upperMethod, 'unknown', [ 'args' => $args ]]);
+            $this->fire(self::BEFORE_EXECUTE, [$upperMethod, $args, 'unknown']);
 
-            return call_user_func_array([$this->getConnection(), $upperMethod], $args);
+            $ret = $this->getConnection()->$upperMethod(...$args);
+
+            // trigger after event (read)
+            $this->fire(self::AFTER_EXECUTE, [$upperMethod, ['args' => $args, 'ret' => $ret], 'unknown']);
+
+            return $ret;
         }
 
         throw new UnknownMethodException("Call the method [$method] don't exists!");

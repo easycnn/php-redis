@@ -11,6 +11,8 @@
 namespace inhere\redis;
 
 /**
+ *
+ * ```php
  * $client = new ClusterClient($config);
  * $config = [
  *     'name1' => [
@@ -22,8 +24,9 @@ namespace inhere\redis;
  *     'name2' => [],
  *     ...
  * ];
+ * ```
  */
-class ClusterClient extends AbstractRedisClient
+class ClusterClient extends AbstractClient
 {
     const MODE = 'cluster';
 
@@ -39,10 +42,15 @@ class ClusterClient extends AbstractRedisClient
             isset($this->getSupportedCommands()[$upperMethod]) &&
             true === $this->getSupportedCommands()[$upperMethod]
         ) {
-            // trigger before event
-            $this->fireEvent(self::BEFORE_EXECUTE, [$upperMethod, 'unknown', [ 'args' => $args ]]);
+            // trigger before execute event
+            $this->fire(self::BEFORE_EXECUTE, [$upperMethod, $args, 'unknown']);
 
-            return call_user_func_array([$this->getConnection(), $upperMethod], $args);
+            $ret = $this->getConnection()->$upperMethod(...$args);
+
+            // trigger after execute event
+            $this->fire(self::AFTER_EXECUTE, [$upperMethod, ['args' => $args, 'ret' => $ret], 'unknown']);
+
+            return $ret;
         }
 
         throw new UnknownMethodException("Call the method [$method] don't exists!");

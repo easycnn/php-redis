@@ -15,19 +15,22 @@ namespace inhere\redis;
 interface ClientInterface
 {
     // mode: singleton master-slave cluster
-    const MODE = '';
+    const MODE = 'singleton';
 
     //
     // event lists
-    // connect disconnect beforeExecute afterExecute
     //
 
-    //
+    // ARGS: ($name, static::MODE, $config)
     const CONNECT = 'connect';
+    // ARGS: ($name, static::MODE)
     const DISCONNECT = 'disconnect';
 
+    // ARGS: ($method, array $args, $operate)
     const BEFORE_EXECUTE = 'beforeExecute';
-    const AFTER_EXECUTE  = 'afterExecute'; // unused
+
+    // ARGS: ($method, array $data, $operate)
+    const AFTER_EXECUTE = 'afterExecute';
 
     /**
      * @param null|string $name
@@ -41,9 +44,15 @@ interface ClientInterface
      */
     public function writer($name = null);
 
-    public function disconnect();
+    /**
+     * @param null|string|array $name
+     * @return bool
+     */
+    public function disconnect($name = null);
 
-    public function fireEvent($event, array $args = []);
+    public function on($event, callable $handler);
+
+    public function fire($event, array $args = []);
 
     public static function supportedEvents();
 
@@ -55,8 +64,8 @@ interface ClientInterface
 
     /**
      * Creates a Redis command with the specified arguments and sends a request to the server.
-     * @param string $method    Command ID.
-     * @param array  $arguments Arguments for the command.
+     * @param string $method Command ID.
+     * @param array $arguments Arguments for the command.
      * @return mixed
      */
     public function __call($method, array $arguments);

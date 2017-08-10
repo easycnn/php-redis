@@ -11,13 +11,11 @@ namespace inhere\redis;
 /**
  * Class AbstractRedisClient
  * @package inhere\redis
- *
  * All the commands exposed by the client generally have the same signature as
  * described by the Redis documentation, but some of them offer an additional
  * and more friendly interface to ease programming which is described in the
  * following list of methods:
- *
- * @method int    del(array $keys)
+ * @method int    del(array|string $keys)
  * @method string dump($key)
  * @method int    exists($key)
  * @method int    expire($key, $seconds)
@@ -113,7 +111,7 @@ namespace inhere\redis;
  * @method string zIncrBy($key, $increment, $member)
  * @method int    zInterStore($destination, array $keys, array $options = null)
  * @method array  zRange($key, $start, $end, $withScores = null)
- * @method array  zRangeByScore($key, $start, $end, array $options = array() )
+ * @method array  zRangeByScore($key, $start, $end, array $options = array())
  * @method int    zRank($key, $member)
  * @method int    zRem($key, $member)
  * @method int    zRemRangeByRank($key, $start, $stop)
@@ -142,7 +140,7 @@ namespace inhere\redis;
  * @method mixed  evalSha($script, $numKeys, $keyOrArg1 = null, $keyOrArgN = null)
  * @method mixed  script($subCommand, $argument = null)
  * @method mixed  auth($password)
- * @method string echo($message)
+ * @method string echo ($message)
  * @method mixed  ping($message = null)
  * @method mixed  select($database)
  * @method mixed  bgRewriteAOF()
@@ -165,9 +163,8 @@ namespace inhere\redis;
  * @method string geoDist($key, $member1, $member2, $unit = null)
  * @method array  geoRadius($key, $longitude, $latitude, $radius, $unit, array $options = null)
  * @method array  geoRadiusByMember($key, $member, $radius, $unit, array $options = null)
- *
  */
-abstract class AbstractRedisClient implements ClientInterface
+abstract class AbstractClient implements ClientInterface
 {
     use SupportedCommandsTrait {
         getSupportedCommands as supCommands;
@@ -218,6 +215,10 @@ abstract class AbstractRedisClient implements ClientInterface
      */
     protected $config = [];
 
+    /**
+     * AbstractRedisClient constructor.
+     * @param array $config
+     */
     public function __construct(array $config)
     {
         $this->setConfig($config);
@@ -230,7 +231,7 @@ abstract class AbstractRedisClient implements ClientInterface
     public function reader($name = null)
     {
         // return a random connection
-        if ( null === $name ) {
+        if (null === $name) {
             $name = array_rand($this->names);
         }
 
@@ -243,7 +244,7 @@ abstract class AbstractRedisClient implements ClientInterface
     public function writer($name = null)
     {
         // return a random connection
-        if ( null === $name ) {
+        if (null === $name) {
             $name = array_rand($this->names);
         }
 
@@ -251,41 +252,50 @@ abstract class AbstractRedisClient implements ClientInterface
     }
 
     /**
-     * getConnection
+     * get Connection
      * @param  string $name
      * @return \Redis
      */
     protected function getConnection($name = null)
     {
         // no config
-        if ( !$this->config ) {
+        if (!$this->config) {
             throw new \RuntimeException('No connection config for connect to the redis');
         }
 
-        if ( !isset($this->names[$name]) ) {
+        if (!isset($this->names[$name])) {
             throw new \InvalidArgumentException("The connection [$name] don't exists!");
         }
 
         // no config for $name connection
-        if ( !$this->config[$name] ) {
+        if (!$this->config[$name]) {
             throw new \RuntimeException('No config for the connection: ' . $name);
         }
 
-        // if not be instanced.
-        if ( !isset($this->connections[$name]) ) {
-            $cb = $this->callbacks[$name];
-            $config = $this->config[$name];
-
+        // if not be instanced OR connection has been lost
+        if (!isset($this->connections[$name]) || !$this->connections[$name]->ping()) {
             // create connection
-            $this->names[$name] = true;
-            $this->connections[$name] = $cb($config);
-
-            // trigger success connected
-            $this->fireEvent(self::CONNECT, [ $name, static::MODE, $config ]);
+            $this->doConnect($name);
         }
 
         // the current connection always latest.
         return ($this->activated = $this->connections[$name]);
+    }
+
+    /**
+     * @param string $name
+     */
+    protected function doConnect($name)
+    {
+        $cb = $this->callbacks[$name];
+        $config = $this->config[$name];
+
+        // create connection
+        $this->names[$name] = true;
+        $this->connections[$name] = $cb($config);
+
+        // trigger success connected
+        $this->fire(self::CONNECT, [$name, static::MODE, $config]);
     }
 
     /**
@@ -294,7 +304,7 @@ abstract class AbstractRedisClient implements ClientInterface
     protected function setCallbacks(array $config)
     {
         foreach ($config as $name => $conf) {
-            if ( !$conf ) {
+            if (!$conf) {
                 continue;
             }
 
@@ -307,7 +317,7 @@ abstract class AbstractRedisClient implements ClientInterface
      */
     protected function setCallback($name)
     {
-        if ( isset($this->names[$name]) && true === $this->names[$name]) {
+        if (isset($this->names[$name]) && true === $this->names[$name]) {
             throw new \LogicException("Connection [$name] has been connected, don't allow override it.");
         }
 
@@ -321,22 +331,21 @@ abstract class AbstractRedisClient implements ClientInterface
      */
     protected function createCallback()
     {
-        return function(array $config)
-        {
+        return function (array $config) {
             $config = array_merge([
-                'host'  => '127.0.0.1',
-                'port'  => '6379',
+                'host' => '127.0.0.1',
+                'port' => '6379',
                 'timeout' => 0.0,
                 'database' => '0',
-                'options'  => []
+                'options' => []
             ], $config);
 
             $client = new \Redis();
             $client->connect($config['host'], $config['port'], $config['timeout']);
             $client->select((int)$config['database']);
 
-            $options = is_array($config['options']) ? $config['options']:[];
-            foreach($options as $name => $value) {
+            $options = is_array($config['options']) ? $config['options'] : [];
+            foreach ($options as $name => $value) {
                 $client->setOption($name, $value);
             }
 
@@ -395,7 +404,7 @@ abstract class AbstractRedisClient implements ClientInterface
      */
     public function on($event, callable $handler)
     {
-        if ( self::isSupportedEvent($event) ) {
+        if (self::isSupportedEvent($event)) {
             $this->eventCallbacks[$event][] = $handler;
         }
     }
@@ -404,21 +413,44 @@ abstract class AbstractRedisClient implements ClientInterface
      * trigger event
      * @param $event
      * @param array $args
+     * @return bool
      */
-    public function fireEvent($event, array $args = [])
+    public function fire($event, array $args = [])
     {
-        if ( isset($this->eventCallbacks[$event])) {
+        if (isset($this->eventCallbacks[$event])) {
             foreach ($this->eventCallbacks[$event] as $cb) {
-                call_user_func_array($cb, $args);
+                // return FALSE to stop fire event.
+                if (false === $cb(... $args)) {
+                    return true;
+                }
             }
         }
+
+        return true;
     }
 
-    public function disconnect()
+    /**
+     * disconnect
+     * @param null|string|array $name
+     * @return bool
+     */
+    public function disconnect($name = null)
     {
-        $this->connections = [];
+        if ($name === null) {
+            $this->connections = [];
+        } else {
+            foreach ((array)$name as $n) {
+                if (isset($this->connections[$n])) {
+                    unset($this->connections[$n]);
+                }
+            }
+        }
 
-        $this->fireEvent(self::DISCONNECT);
+        $this->activated = null;
+
+        $this->fire(self::DISCONNECT, [$name, static::MODE]);
+
+        return true;
     }
 
     /**
@@ -426,7 +458,7 @@ abstract class AbstractRedisClient implements ClientInterface
      */
     public static function supportedEvents()
     {
-        return [ self::CONNECT, self::DISCONNECT, self::BEFORE_EXECUTE, self::AFTER_EXECUTE ];
+        return [self::CONNECT, self::DISCONNECT, self::BEFORE_EXECUTE, self::AFTER_EXECUTE];
     }
 
     /**
@@ -443,7 +475,7 @@ abstract class AbstractRedisClient implements ClientInterface
      */
     public function getSupportedCommands()
     {
-        return array_merge($this->supCommands(),[
+        return array_merge($this->supCommands(), [
             'SHUTDOWN' => false,
             'INFO' => false,
             'DBSIZE' => false,
@@ -488,7 +520,7 @@ abstract class AbstractRedisClient implements ClientInterface
      * @param $member
      * @return bool
      */
-    public function existsInSet($key,$member)
+    public function existsInSet($key, $member)
     {
         return (bool)$this->sIsMember($key, $member);
     }

@@ -30,7 +30,7 @@ trait SupportedCommandsTrait
     public function getSupportedCommands()
     {
         // command => status(command enable status) // True enabled, False disabled
-        return array(
+        return [
             /* ---------------- Redis 1.2 ---------------- */
 
             /* commands operating on the key space */
@@ -148,7 +148,7 @@ trait SupportedCommandsTrait
             'HINCRBY' => true,
             'HGET' => true,
             'HMGET' => true,
-                         'HDEL' => true,
+            'HDEL' => true,
             'HEXISTS' => true,
             'HLEN' => true,
             'HKEYS' => true,
@@ -275,7 +275,7 @@ trait SupportedCommandsTrait
             'GEODIST' => true,
             'GEORADIUS' => true,
             'GEORADIUSBYMEMBER' => true,
-        );
+        ];
     }
 
 }
