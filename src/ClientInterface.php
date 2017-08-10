@@ -21,9 +21,9 @@ interface ClientInterface
     // event lists
     //
 
-    // ARGS: ($name, static::MODE, $config)
+    // ARGS: ($name, $mode, $config)
     const CONNECT = 'connect';
-    // ARGS: ($name, static::MODE)
+    // ARGS: ($name, $mode)
     const DISCONNECT = 'disconnect';
 
     // ARGS: ($method, array $args, $operate)

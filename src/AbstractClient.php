@@ -454,6 +454,16 @@ abstract class AbstractClient implements ClientInterface
     }
 
     /**
+     * __destruct
+     */
+    public function __destruct()
+    {
+        $this->disconnect();
+
+        $this->callbacks = $this->config = $this->eventCallbacks =[];
+    }
+
+    /**
      * @return array
      */
     public static function supportedEvents()

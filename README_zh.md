@@ -1,38 +1,43 @@
 # php-redis
 
-a simple redis client library of the php
+简单的redis操作客户端包装库
 
-[中文README](./README_zh.md)
+- 使用方便，直接访问所有 `\Redis` 的所有命令
+- 支持配置 单例模式, 主从模式， 集群模式
+- 支持连接，操作事件监听
+- 主从模式时，会自动选择 reader/writer 来执行对应的命令
 
-## project
+[EN README](./README.md)
+
+## 项目
 
 - **github** https://github.com/inhere/php-redis.git
 - **git@osc** https://git.oschina.net/inhere/php-redis.git
 
-## Install
+## 安装
 
-> NOTICE: php extension 'redis' is required 
+> NOTICE: 依赖php的 'redis' 扩展
 
 - use composer
 
-edit `composer.json`, at _require_ add
+编辑 `composer.json`, 添加
 
 ```
 "inhere/redis": "dev-master",
 ```
 
-run: `composer update`
+然后运行: `composer update`
 
-- Direct fetch
+- 直接拉取
 
 ```
 git clone https://github.com/inhere/php-redis.git // github
 git clone https://git.oschina.net/inhere/php-redis.git // git@osc
 ```
 
-## config
+## 配置
 
-### singleton config
+### 单例配置
 
 ```php
 $config = [
@@ -43,7 +48,7 @@ $config = [
 ];
 ```
 
-### master-slave config
+### 主从配置
 
 ```php
 $config = [
@@ -65,7 +70,7 @@ $config = [
     ];
 ```
 
-### cluster config
+### 集群配置
 
 ```php
 $config = [
@@ -85,23 +90,44 @@ $config = [
 ];
 ```
 
-## create client 
+## 创建客户端
+
+根据不同的配置会自动创建对应的客户端实例
+
+> 创建时不会进行连接，当发生命令操作时，才会进行连接
 
 ```php
 use inhere\redis\ClientFactory;
 
-// $app is my application instance.
-
 $client = ClientFactory::make($config);
 ```
 
-## add event listen
+## 事件监听
+
+支持四个事件 `连接时` `断开连接时` `执行命令之前` `执行命令之后`, 方便进行调试和记录操作日志
 
 ```php
+    // ARGS: ($name, $mode, $config)
+    const CONNECT = 'connect';
+    // ARGS: ($name, $mode)
+    const DISCONNECT = 'disconnect';
+
+    // ARGS: ($method, array $args, $operate)
+    const BEFORE_EXECUTE = 'beforeExecute';
+
+    // ARGS: ($method, array $data, $operate)
+    const AFTER_EXECUTE = 'afterExecute';
+```
+
+### 添加事件监听
+
+```php
+// 连接时
 $client->on(ClientInterface::CONNECT, function($name, $mode, $config) {
     printf("CONNECT:connect to the name=%s,mode=%s,config=%s\n", $name, $mode, json_encode($config));
 });
 
+// 断开连接时
 $client->on(ClientInterface::DISCONNECT, function($name, $mode) {
     $names = 'all';
 
@@ -112,18 +138,20 @@ $client->on(ClientInterface::DISCONNECT, function($name, $mode) {
     printf("DISCONNECT:close there are %s connections,mode=%s\n", $names, $mode);
 });
 
+// 执行命令之前
 $client->on('beforeExecute', function ($cmd, array $args, $operate)
 {
     printf("BEFORE_EXECUTE:will be execute the command=$cmd, operate=$operate, args=%s\n", json_encode($args));
 });
 
+// 执行命令之后
 $client->on('afterExecute', function ($cmd, array $data, $operate)
 {
     printf("AFTER_EXECUTE:has been executed the command=$cmd, operate=$operate, data=%s\n", json_encode($data));
 });
 ```
 
-## Usage
+## 使用
 
 ```php
 echo $client->ping(); // +PONG
@@ -143,10 +171,26 @@ $ret0 = $client->get('key0'); // bool(false)
 var_dump($suc, $ret0);
 ```
 
-## More
-
-examples please the [examples](./examples)
+更多请看示例 [examples](./examples)
 
 ## License
 
 MIT
+
+## 我的其他项目
+
+### `inhere/console` [github](https://github.com/inhere/php-console) [git@osc](https://git.oschina.net/inhere/php-console)
+
+功能丰富的命令行应用，命令行工具库
+
+### `inhere/sroute` [github](https://github.com/inhere/php-srouter)  [git@osc](https://git.oschina.net/inhere/php-srouter)
+ 
+ 轻量且功能丰富快速的路由库
+
+### `inhere/php-validate` [github](https://github.com/inhere/php-validate)  [git@osc](https://git.oschina.net/inhere/php-validate)
+ 
+ 一个简洁小巧且功能完善的php验证库。仅有几个文件，无依赖。
+ 
+### `inhere/http` [github](https://github.com/inhere/php-http) [git@osc](https://git.oschina.net/inhere/php-http)
+
+http 工具库(`request` 请求 `response` 响应 `curl` curl请求库，有简洁、完整和并发请求三个版本的类)
